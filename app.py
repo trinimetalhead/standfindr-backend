@@ -52,6 +52,24 @@ else:
     class Landmark: pass
     class Fare: pass
 
+# Debug route to check database connection
+@app.route('/api/debug/db')
+def debug_db():
+    try:
+        # Try to connect to database
+        result = db.session.execute(db.text('SELECT 1'))
+        return jsonify({'status': 'success', 'message': 'Database connected!'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e), 'database_url': os.getenv('DATABASE_URL')})
+
+# Debug route to check environment variables
+@app.route('/api/debug/env')
+def debug_env():
+    return jsonify({
+        'database_url': os.getenv('DATABASE_URL'),
+        'flask_env': os.getenv('FLASK_ENV')
+    })
+
 # Simple health check that doesn't require database
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -96,7 +114,98 @@ if db:
         except Exception as e:
             return jsonify({'error': str(e)}), 500
 
-    # Add your other database routes here (get_routes, get_route, etc.)
+    # Sample data insertion endpoint
+    @app.route('/api/insert-sample-data', methods=['POST'])
+    def insert_sample_data():
+        try:
+            # Clear existing data first
+            db.session.query(Fare).delete()
+            db.session.query(Landmark).delete()
+            db.session.query(Route).delete()
+
+            # Create sample route
+            sample_route = Route(
+                start_location="Sangre Grande",
+                end_location="Port of Spain",
+                vehicle_type="Red Band Maxi"
+            )
+            db.session.add(sample_route)
+            db.session.flush()
+
+            # Create sample landmarks
+            landmarks = [
+                Landmark(
+                    route_id=sample_route.id,
+                    description="Sangre Grande Maxi Stand (opposite the catholic church)",
+                    image_url="http://localhost:5000/static/landmark.jpg"
+                ),
+                Landmark(
+                    route_id=sample_route.id,
+                    description="Port of Spain drop-off at City Gate",
+                    image_url=None
+                )
+            ]
+
+            # Create sample fare
+            fare = Fare(
+                route_id=sample_route.id,
+                estimated_fare=15.00
+            )
+
+            # Add all to session and commit
+            db.session.add_all(landmarks)
+            db.session.add(fare)
+            db.session.commit()
+
+            return jsonify({
+                'message': 'Sample data inserted successfully',
+                'route_id': sample_route.id
+            })
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/routes', methods=['GET'])
+    def get_routes():
+        try:
+            routes = Route.query.all()
+            return jsonify([{
+                'id': route.id,
+                'start_location': route.start_location,
+                'end_location': route.end_location,
+                'vehicle_type': route.vehicle_type
+            } for route in routes])
+        except Exception as e:
+            print(f"Error fetching routes: {e}")
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/routes/<int:id>', methods=['GET'])
+    def get_route(id):
+        try:
+            route = Route.query.get_or_404(id)
+            landmarks = Landmark.query.filter_by(route_id=id).all()
+            fares = Fare.query.filter_by(route_id=id).all()
+
+            return jsonify({
+                'route': {
+                    'id': route.id,
+                    'start_location': route.start_location,
+                    'end_location': route.end_location,
+                    'vehicle_type': route.vehicle_type
+                },
+                'landmarks': [{
+                    'id': landmark.id,
+                    'description': landmark.description,
+                    'image_url': landmark.image_url
+                } for landmark in landmarks],
+                'fares': [{
+                    'id': fare.id,
+                    'estimated_fare': float(fare.estimated_fare)
+                } for fare in fares]
+            })
+        except Exception as e:
+            print(f"Error fetching route {id}: {e}")
+            return jsonify({'error': str(e)}), 500
 
 @app.route('/static/<path:filename>')
 def serve_static(filename):
