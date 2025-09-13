@@ -58,6 +58,20 @@ else:
     class Landmark: pass
     class Fare: pass
 
+# Debug route to check raw database connection
+@app.route('/api/debug/raw-db')
+def debug_raw_db():
+    try:
+        import psycopg2
+        conn = psycopg2.connect(os.getenv('DATABASE_URL'))
+        cur = conn.cursor()
+        cur.execute('SELECT 1')
+        result = cur.fetchone()
+        conn.close()
+        return jsonify({'status': 'success', 'message': 'Raw database connection successful!'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)})
+
 # Debug route to check database connection
 @app.route('/api/debug/db')
 def debug_db():
