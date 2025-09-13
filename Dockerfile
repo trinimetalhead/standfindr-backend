@@ -7,4 +7,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-CMD ["gunicorn", "app:app"]
+# Explicitly use port 8080 and increase timeout
+CMD ["gunicorn", "app:app", "-b", "0.0.0.0:8080", "--timeout", "120", "--preload"]

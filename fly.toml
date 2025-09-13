@@ -1,0 +1,29 @@
+app = "standfindr-backend"
+primary_region = "iad"
+
+[build]
+  builder = "dockerfile"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  
+[[http_service.ports]]
+  port = 80
+  handlers = ["http"]
+  
+[[http_service.ports]] 
+  port = 443
+  handlers = ["http", "tls"]
+
+# Add health check
+[[http_service.checks]]
+  interval = 10000
+  grace_period = "5s"
+  method = "get"
+  path = "/"
+  timeout = 2000
+
+[env]
+  DATABASE_URL = "postgresql://standfindr_user:knSLNtYBzl7Yhfxb1LqjG65vquiPHEbW@dpg-d31m6mbipnbc73cfarh0-a:5432/standfindr?sslmode=require"
+  FLASK_ENV = "production"
