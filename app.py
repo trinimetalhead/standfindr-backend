@@ -72,9 +72,9 @@ else:
 @app.route('/api/debug/raw-db')
 def debug_raw_db():
     try:
-        import psycopg2
+        import psycopg
         print("🔄 Attempting raw PostgreSQL connection...")
-        conn = psycopg2.connect(os.getenv('DATABASE_URL'))
+        conn = psycopg.connect(os.getenv('DATABASE_URL'))
         cur = conn.cursor()
         cur.execute('SELECT 1')
         result = cur.fetchone()
