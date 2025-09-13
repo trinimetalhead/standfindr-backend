@@ -11,24 +11,31 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
-# Database configuration with error handling
+# Enhanced database configuration with detailed error logging
 try:
     db_url = os.getenv('DATABASE_URL')
+    print(f"🔧 DATABASE_URL: {db_url}")
+    
     if db_url and db_url.startswith('postgres://'):
         db_url = db_url.replace('postgres://', 'postgresql://', 1)
+        print(f"🔧 Converted to: {db_url}")
+    
     app.config['SQLALCHEMY_DATABASE_URI'] = db_url
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    # Add SSL configuration
     app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
         'connect_args': {
             'sslmode': 'require'
         }
     }
+    
+    print("🔄 Attempting to initialize SQLAlchemy...")
     db = SQLAlchemy(app)
-    print("Database connection successful!")
+    print("✅ SQLAlchemy initialized successfully!")
+    
 except Exception as e:
-    print(f"Database connection error: {e}")
-    # Set db to None to avoid errors
+    print(f"❌ SQLAlchemy initialization failed: {e}")
+    import traceback
+    traceback.print_exc()  # This will show the full error stack
     db = None
 
 # Define models only if database is connected
@@ -52,34 +59,45 @@ if db:
         id = db.Column(db.Integer, primary_key=True)
         route_id = db.Column(db.Integer, db.ForeignKey('routes.id'), nullable=False)
         estimated_fare = db.Column(db.Numeric(10, 2), nullable=False)
+        
+    print("✅ Database models defined successfully!")
 else:
     # Define empty classes if no database
     class Route: pass
     class Landmark: pass
     class Fare: pass
+    print("⚠️  Using placeholder classes - database not connected")
 
 # Debug route to check raw database connection
 @app.route('/api/debug/raw-db')
 def debug_raw_db():
     try:
         import psycopg2
+        print("🔄 Attempting raw PostgreSQL connection...")
         conn = psycopg2.connect(os.getenv('DATABASE_URL'))
         cur = conn.cursor()
         cur.execute('SELECT 1')
         result = cur.fetchone()
         conn.close()
+        print("✅ Raw database connection successful!")
         return jsonify({'status': 'success', 'message': 'Raw database connection successful!'})
     except Exception as e:
+        print(f"❌ Raw connection failed: {e}")
         return jsonify({'status': 'error', 'message': str(e)})
 
-# Debug route to check database connection
+# Debug route to check SQLAlchemy database connection
 @app.route('/api/debug/db')
 def debug_db():
+    if not db:
+        return jsonify({'status': 'error', 'message': 'SQLAlchemy not initialized'})
+    
     try:
-        # Try to connect to database
+        print("🔄 Testing SQLAlchemy connection...")
         result = db.session.execute(db.text('SELECT 1'))
+        print("✅ SQLAlchemy connection successful!")
         return jsonify({'status': 'success', 'message': 'Database connected!'})
     except Exception as e:
+        print(f"❌ SQLAlchemy connection failed: {e}")
         return jsonify({'status': 'error', 'message': str(e), 'database_url': os.getenv('DATABASE_URL')})
 
 # Debug route to check environment variables
@@ -90,12 +108,11 @@ def debug_env():
         'flask_env': os.getenv('FLASK_ENV')
     })
 
-# Simple health check that doesn't require database
+# Simple health check
 @app.route('/api/health', methods=['GET'])
 def health_check():
     if db:
         try:
-            # Try a simple database query
             db.session.execute(db.text('SELECT 1'))
             return jsonify({'status': 'healthy', 'database': 'connected'})
         except Exception as e:
@@ -138,12 +155,10 @@ if db:
     @app.route('/api/insert-sample-data', methods=['POST'])
     def insert_sample_data():
         try:
-            # Clear existing data first
             db.session.query(Fare).delete()
             db.session.query(Landmark).delete()
             db.session.query(Route).delete()
 
-            # Create sample route
             sample_route = Route(
                 start_location="Sangre Grande",
                 end_location="Port of Spain",
@@ -152,7 +167,6 @@ if db:
             db.session.add(sample_route)
             db.session.flush()
 
-            # Create sample landmarks
             landmarks = [
                 Landmark(
                     route_id=sample_route.id,
@@ -166,13 +180,11 @@ if db:
                 )
             ]
 
-            # Create sample fare
             fare = Fare(
                 route_id=sample_route.id,
                 estimated_fare=15.00
             )
 
-            # Add all to session and commit
             db.session.add_all(landmarks)
             db.session.add(fare)
             db.session.commit()
@@ -233,4 +245,5 @@ def serve_static(filename):
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5001))
+    print(f"🚀 Starting Flask server on port {port}...")
     app.run(debug=True, host='0.0.0.0', port=port)
