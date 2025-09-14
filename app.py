@@ -5,17 +5,17 @@ from dotenv import load_dotenv
 import os
 import traceback
 
-# ------------------------------
-# LOAD ENVIRONMENT VARIABLES
-# ------------------------------
+# ------------------------------------------------------
+# Load environment
+# ------------------------------------------------------
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
 
-# ------------------------------
-# DATABASE CONFIGURATION
-# ------------------------------
+# ------------------------------------------------------
+# Database
+# ------------------------------------------------------
 db = None
 try:
     db_url = os.getenv("DATABASE_URL")
@@ -24,7 +24,7 @@ try:
     if not db_url:
         raise ValueError("DATABASE_URL is not set!")
 
-    # Fix for Render Postgres
+    # Render’s postgres URLs need psycopg prefix
     if db_url.startswith("postgres://"):
         db_url = db_url.replace("postgres://", "postgresql+psycopg://", 1)
     elif db_url.startswith("postgresql://"):
@@ -42,12 +42,12 @@ except Exception as e:
     traceback.print_exc()
     db = None
 
-# ------------------------------
-# DATABASE MODELS
-# ------------------------------
+# ------------------------------------------------------
+# Models
+# ------------------------------------------------------
 if db:
     class Route(db.Model):
-        __tablename__ = 'routes'
+        __tablename__ = "routes"
         id = db.Column(db.Integer, primary_key=True)
         start_location = db.Column(db.String(100), nullable=False)
         end_location = db.Column(db.String(100), nullable=False)
@@ -57,16 +57,16 @@ if db:
         landmarks = db.relationship("Landmark", backref="route", cascade="all, delete-orphan")
 
     class Landmark(db.Model):
-        __tablename__ = 'landmarks'
+        __tablename__ = "landmarks"
         id = db.Column(db.Integer, primary_key=True)
-        route_id = db.Column(db.Integer, db.ForeignKey('routes.id'), nullable=False)
+        route_id = db.Column(db.Integer, db.ForeignKey("routes.id"), nullable=False)
         description = db.Column(db.Text, nullable=False)
         image_url = db.Column(db.String(255))
 
     class Fare(db.Model):
-        __tablename__ = 'fares'
+        __tablename__ = "fares"
         id = db.Column(db.Integer, primary_key=True)
-        route_id = db.Column(db.Integer, db.ForeignKey('routes.id'), nullable=False)
+        route_id = db.Column(db.Integer, db.ForeignKey("routes.id"), nullable=False)
         estimated_fare = db.Column(db.Numeric(10, 2), nullable=False)
 
     print("✅ Database models defined successfully!")
@@ -76,75 +76,73 @@ else:
     class Fare: pass
     print("⚠️ Using placeholder classes - database not connected")
 
-# ------------------------------
-# BASIC ROUTES
-# ------------------------------
-@app.route('/')
+# ------------------------------------------------------
+# Routes
+# ------------------------------------------------------
+@app.route("/")
 def hello():
-    return 'Flask backend is working!'
+    return "Flask backend is working!"
 
-@app.route('/api/health')
+@app.route("/api/health")
 def health_check():
-    if db:
-        try:
-            db.session.execute(db.text('SELECT 1'))
-            return jsonify({'status': 'healthy', 'database': 'connected'})
-        except Exception as e:
-            return jsonify({'status': 'degraded', 'database': 'disconnected', 'error': str(e)})
-    else:
-        return jsonify({'status': 'degraded', 'database': 'not configured'})
+    if not db:
+        return jsonify({"status": "degraded", "database": "not configured"})
+    try:
+        db.session.execute(db.text("SELECT 1"))
+        return jsonify({"status": "healthy", "database": "connected"})
+    except Exception as e:
+        return jsonify({"status": "degraded", "database": "disconnected", "error": str(e)})
 
-@app.route('/static/<path:filename>')
+@app.route("/static/<path:filename>")
 def serve_static(filename):
-    return send_from_directory('static', filename)
+    return send_from_directory("static", filename)
 
-# ------------------------------
-# GET ALL ROUTES
-# ------------------------------
-@app.route('/api/routes', methods=['GET'])
+# ---- Get all routes ----
+@app.route("/api/routes", methods=["GET"])
 def get_routes():
     if not db:
-        return jsonify({'status': 'error', 'message': 'Database not connected'}), 500
+        return jsonify({"status": "error", "message": "Database not connected"}), 500
 
     routes = Route.query.all()
-    return jsonify([{
-        'id': r.id,
-        'start_location': r.start_location,
-        'end_location': r.end_location,
-        'vehicle_type': r.vehicle_type,
-        'fares': [{'id': f.id, 'estimated_fare': float(f.estimated_fare)} for f in r.fares],
-        'landmarks': [{'id': l.id, 'description': l.description, 'image_url': l.image_url} for l in r.landmarks]
-    } for r in routes])
+    return jsonify([
+        {
+            "id": r.id,
+            "start_location": r.start_location,
+            "end_location": r.end_location,
+            "vehicle_type": r.vehicle_type,
+            "fares": [{"id": f.id, "estimated_fare": float(f.estimated_fare)} for f in r.fares],
+            "landmarks": [{"id": l.id, "description": l.description, "image_url": l.image_url} for l in r.landmarks]
+        }
+        for r in routes
+    ])
 
-# ------------------------------
-# GET SPECIFIC ROUTE
-# ------------------------------
-@app.route('/api/routes/<int:route_id>', methods=['GET'])
+# ---- Get one route by ID ----
+@app.route("/api/routes/<int:route_id>", methods=["GET"])
 def get_route(route_id):
     if not db:
-        return jsonify({'status': 'error', 'message': 'Database not connected'}), 500
+        return jsonify({"status": "error", "message": "Database not connected"}), 500
+
     r = Route.query.get(route_id)
     if not r:
-        return jsonify({'status': 'error', 'message': 'Route not found'}), 404
+        return jsonify({"status": "error", "message": "Route not found"}), 404
+
     return jsonify({
-        'id': r.id,
-        'start_location': r.start_location,
-        'end_location': r.end_location,
-        'vehicle_type': r.vehicle_type,
-        'fares': [{'id': f.id, 'estimated_fare': float(f.estimated_fare)} for f in r.fares],
-        'landmarks': [{'id': l.id, 'description': l.description, 'image_url': l.image_url} for l in r.landmarks]
+        "id": r.id,
+        "start_location": r.start_location,
+        "end_location": r.end_location,
+        "vehicle_type": r.vehicle_type,
+        "fares": [{"id": f.id, "estimated_fare": float(f.estimated_fare)} for f in r.fares],
+        "landmarks": [{"id": l.id, "description": l.description, "image_url": l.image_url} for l in r.landmarks]
     })
 
-# ------------------------------
-# SEARCH ROUTES (for Enter key in UI)
-# ------------------------------
-@app.route('/api/search', methods=['GET'])
+# ---- Search by start & end ----
+@app.route("/api/search", methods=["GET"])
 def search_routes():
     if not db:
-        return jsonify({'status': 'error', 'message': 'Database not connected'}), 500
+        return jsonify({"status": "error", "message": "Database not connected"}), 500
 
-    start = request.args.get('start')
-    end = request.args.get('end')
+    start = request.args.get("start")
+    end = request.args.get("end")
 
     query = Route.query
     if start:
@@ -153,33 +151,32 @@ def search_routes():
         query = query.filter(Route.end_location.ilike(f"%{end}%"))
 
     routes = query.all()
+    return jsonify([
+        {
+            "id": r.id,
+            "start_location": r.start_location,
+            "end_location": r.end_location,
+            "vehicle_type": r.vehicle_type,
+            "fares": [{"id": f.id, "estimated_fare": float(f.estimated_fare)} for f in r.fares],
+            "landmarks": [{"id": l.id, "description": l.description, "image_url": l.image_url} for l in r.landmarks]
+        }
+        for r in routes
+    ])
 
-    return jsonify([{
-        'id': r.id,
-        'start_location': r.start_location,
-        'end_location': r.end_location,
-        'vehicle_type': r.vehicle_type,
-        'fares': [{'id': f.id, 'estimated_fare': float(f.estimated_fare)} for f in r.fares],
-        'landmarks': [{'id': l.id, 'description': l.description, 'image_url': l.image_url} for l in r.landmarks]
-    } for r in routes])
-
-# ------------------------------
-# DEBUG ROUTE
-# ------------------------------
-@app.route('/api/debug/db')
+@app.route("/api/debug/db")
 def debug_db():
     if not db:
-        return jsonify({'status': 'error', 'message': 'SQLAlchemy not initialized'})
+        return jsonify({"status": "error", "message": "SQLAlchemy not initialized"})
     try:
-        db.session.execute(db.text('SELECT 1'))
-        return jsonify({'status': 'success', 'message': 'Database connected!'})
+        db.session.execute(db.text("SELECT 1"))
+        return jsonify({"status": "success", "message": "Database connected!"})
     except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)})
+        return jsonify({"status": "error", "message": str(e)})
 
-# ------------------------------
-# RUN APP
-# ------------------------------
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
+# ------------------------------------------------------
+# Run
+# ------------------------------------------------------
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
     print(f"🚀 Starting Flask server on port {port}...")
-    app.run(debug=True, host='0.0.0.0', port=port)
+    app.run(debug=True, host="0.0.0.0", port=port)

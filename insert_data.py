@@ -13,7 +13,7 @@ with app.app_context():
         vehicle_type="Red Band Maxi"
     )
     db.session.add(sample_route)
-    db.session.flush()
+    db.session.flush( )
     
     # Create sample landmarks
     landmarks = [
