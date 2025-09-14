@@ -11,8 +11,6 @@ import traceback
 load_dotenv()
 
 app = Flask(__name__)
-
-# ✅ Allow only your Firebase frontend to access the backend
 CORS(app, origins=["https://standfindr.web.app"])
 
 # ------------------------------------------------------
@@ -26,7 +24,6 @@ try:
     if not db_url:
         raise ValueError("DATABASE_URL is not set!")
 
-    # Render’s postgres URLs need psycopg prefix
     if db_url.startswith("postgres://"):
         db_url = db_url.replace("postgres://", "postgresql+psycopg://", 1)
     elif db_url.startswith("postgresql://"):
@@ -133,8 +130,9 @@ def search_routes():
     if not db:
         return jsonify({"status": "error", "message": "Database not connected"}), 500
 
-    start = request.args.get("start")
-    end = request.args.get("end")
+    start = request.args.get("start", "").strip()
+    end = request.args.get("end", "").strip()
+    print(f"🔍 Searching for start='{start}' end='{end}'")
 
     query = Route.query
     if start:
