@@ -127,25 +127,22 @@ def get_route(route_id):
 
 @app.route("/api/search", methods=["GET"])
 def search_routes():
-    if not db:
-        return jsonify({"status": "error", "message": "Database not connected"}), 500
-
     start = request.args.get("start", "").strip()
     end = request.args.get("end", "").strip()
-    print(f"🔍 Raw SQL test: start='{start}' end='{end}'")
+    print(f"🔍 Exact match search: start='{start}' end='{end}'")
 
     try:
         results = db.session.execute(
             db.text("""
                 SELECT id, start_location, end_location, vehicle_type
                 FROM routes
-                WHERE start_location ILIKE :start
-                AND end_location ILIKE :end
+                WHERE start_location = :start
+                AND end_location = :end
             """),
-            {"start": f"%{start}%", "end": f"%{end}%"}
+            {"start": start, "end": end}
         ).fetchall()
 
-        print(f"✅ Raw SQL returned {len(results)} rows")
+        print(f"✅ Exact match returned {len(results)} rows")
 
         routes = [
             {
@@ -160,7 +157,7 @@ def search_routes():
         return jsonify(routes)
 
     except Exception as e:
-        print(f"❌ Raw SQL failed: {e}")
+        print(f"❌ Exact match failed: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route("/api/debug/db")
