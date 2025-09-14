@@ -11,7 +11,9 @@ import traceback
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
+
+# ✅ Allow only your Firebase frontend to access the backend
+CORS(app, origins=["https://standfindr.web.app"])
 
 # ------------------------------------------------------
 # Database
@@ -71,9 +73,6 @@ if db:
 
     print("✅ Database models defined successfully!")
 else:
-    class Route: pass
-    class Landmark: pass
-    class Fare: pass
     print("⚠️ Using placeholder classes - database not connected")
 
 # ------------------------------------------------------
@@ -93,11 +92,6 @@ def health_check():
     except Exception as e:
         return jsonify({"status": "degraded", "database": "disconnected", "error": str(e)})
 
-@app.route("/static/<path:filename>")
-def serve_static(filename):
-    return send_from_directory("static", filename)
-
-# ---- Get all routes ----
 @app.route("/api/routes", methods=["GET"])
 def get_routes():
     if not db:
@@ -116,7 +110,6 @@ def get_routes():
         for r in routes
     ])
 
-# ---- Get one route by ID ----
 @app.route("/api/routes/<int:route_id>", methods=["GET"])
 def get_route(route_id):
     if not db:
@@ -135,7 +128,6 @@ def get_route(route_id):
         "landmarks": [{"id": l.id, "description": l.description, "image_url": l.image_url} for l in r.landmarks]
     })
 
-# ---- Search by start & end ----
 @app.route("/api/search", methods=["GET"])
 def search_routes():
     if not db:
