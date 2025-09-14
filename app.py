@@ -5,7 +5,9 @@ from dotenv import load_dotenv
 import os
 import traceback
 
-# Load environment variables
+# ------------------------------
+# LOAD ENVIRONMENT VARIABLES
+# ------------------------------
 load_dotenv()
 
 app = Flask(__name__)
@@ -22,7 +24,7 @@ try:
     if not db_url:
         raise ValueError("DATABASE_URL is not set!")
 
-    # For Render with psycopg[binary] and Python 3.13
+    # Fix for Render Postgres
     if db_url.startswith("postgres://"):
         db_url = db_url.replace("postgres://", "postgresql+psycopg://", 1)
     elif db_url.startswith("postgresql://"):
@@ -51,6 +53,9 @@ if db:
         end_location = db.Column(db.String(100), nullable=False)
         vehicle_type = db.Column(db.String(50), nullable=False)
 
+        fares = db.relationship("Fare", backref="route", cascade="all, delete-orphan")
+        landmarks = db.relationship("Landmark", backref="route", cascade="all, delete-orphan")
+
     class Landmark(db.Model):
         __tablename__ = 'landmarks'
         id = db.Column(db.Integer, primary_key=True)
@@ -72,7 +77,7 @@ else:
     print("⚠️ Using placeholder classes - database not connected")
 
 # ------------------------------
-# ROUTES
+# BASIC ROUTES
 # ------------------------------
 @app.route('/')
 def hello():
@@ -94,57 +99,21 @@ def serve_static(filename):
     return send_from_directory('static', filename)
 
 # ------------------------------
-# SAMPLE DATA INSERTION
-# ------------------------------
-@app.route('/api/insert-sample-data', methods=['POST'])
-def insert_sample_data():
-    if not db:
-        return jsonify({'status': 'error', 'message': 'Database not connected'}), 500
-
-    try:
-        # Clear tables first (optional)
-        db.session.query(Fare).delete()
-        db.session.query(Landmark).delete()
-        db.session.query(Route).delete()
-        db.session.commit()
-
-        # Sample routes
-        route1 = Route(start_location="Point A", end_location="Point B", vehicle_type="Bus")
-        route2 = Route(start_location="Point C", end_location="Point D", vehicle_type="Taxi")
-        db.session.add_all([route1, route2])
-        db.session.commit()
-
-        # Sample landmarks
-        lm1 = Landmark(route_id=route1.id, description="Landmark 1", image_url=None)
-        lm2 = Landmark(route_id=route2.id, description="Landmark 2", image_url=None)
-        db.session.add_all([lm1, lm2])
-        db.session.commit()
-
-        # Sample fares
-        fare1 = Fare(route_id=route1.id, estimated_fare=12.50)
-        fare2 = Fare(route_id=route2.id, estimated_fare=8.75)
-        db.session.add_all([fare1, fare2])
-        db.session.commit()
-
-        return jsonify({'status': 'success', 'message': 'Sample data inserted!'})
-
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'status': 'error', 'message': str(e)})
-
-# ------------------------------
 # GET ALL ROUTES
 # ------------------------------
 @app.route('/api/routes', methods=['GET'])
 def get_routes():
     if not db:
         return jsonify({'status': 'error', 'message': 'Database not connected'}), 500
+
     routes = Route.query.all()
     return jsonify([{
         'id': r.id,
         'start_location': r.start_location,
         'end_location': r.end_location,
-        'vehicle_type': r.vehicle_type
+        'vehicle_type': r.vehicle_type,
+        'fares': [{'id': f.id, 'estimated_fare': float(f.estimated_fare)} for f in r.fares],
+        'landmarks': [{'id': l.id, 'description': l.description, 'image_url': l.image_url} for l in r.landmarks]
     } for r in routes])
 
 # ------------------------------
@@ -161,11 +130,41 @@ def get_route(route_id):
         'id': r.id,
         'start_location': r.start_location,
         'end_location': r.end_location,
-        'vehicle_type': r.vehicle_type
+        'vehicle_type': r.vehicle_type,
+        'fares': [{'id': f.id, 'estimated_fare': float(f.estimated_fare)} for f in r.fares],
+        'landmarks': [{'id': l.id, 'description': l.description, 'image_url': l.image_url} for l in r.landmarks]
     })
 
 # ------------------------------
-# DEBUG ROUTES
+# SEARCH ROUTES (for Enter key in UI)
+# ------------------------------
+@app.route('/api/search', methods=['GET'])
+def search_routes():
+    if not db:
+        return jsonify({'status': 'error', 'message': 'Database not connected'}), 500
+
+    start = request.args.get('start')
+    end = request.args.get('end')
+
+    query = Route.query
+    if start:
+        query = query.filter(Route.start_location.ilike(f"%{start}%"))
+    if end:
+        query = query.filter(Route.end_location.ilike(f"%{end}%"))
+
+    routes = query.all()
+
+    return jsonify([{
+        'id': r.id,
+        'start_location': r.start_location,
+        'end_location': r.end_location,
+        'vehicle_type': r.vehicle_type,
+        'fares': [{'id': f.id, 'estimated_fare': float(f.estimated_fare)} for f in r.fares],
+        'landmarks': [{'id': l.id, 'description': l.description, 'image_url': l.image_url} for l in r.landmarks]
+    } for r in routes])
+
+# ------------------------------
+# DEBUG ROUTE
 # ------------------------------
 @app.route('/api/debug/db')
 def debug_db():
