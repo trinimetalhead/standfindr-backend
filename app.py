@@ -132,26 +132,33 @@ def search_routes():
 
     start = request.args.get("start", "").strip()
     end = request.args.get("end", "").strip()
-    print(f"🔍 Searching for start='{start}' end='{end}'")
+    print(f"🔍 Raw SQL test: start='{start}' end='{end}'")
 
-    query = Route.query
-    if start:
-        query = query.filter(Route.start_location.ilike(f"%{start}%"))
-    if end:
-        query = query.filter(Route.end_location.ilike(f"%{end}%"))
+    try:
+        results = db.session.execute(
+            db.text("""
+                SELECT * FROM routes
+                WHERE start_location ILIKE :start
+                AND end_location ILIKE :end
+            """),
+            {"start": f"%{start}%", "end": f"%{end}%"}
+        ).fetchall()
 
-    routes = query.all()
-    return jsonify([
-        {
-            "id": r.id,
-            "start_location": r.start_location,
-            "end_location": r.end_location,
-            "vehicle_type": r.vehicle_type,
-            "fares": [{"id": f.id, "estimated_fare": float(f.estimated_fare)} for f in r.fares],
-            "landmarks": [{"id": l.id, "description": l.description, "image_url": l.image_url} for l in r.landmarks]
-        }
-        for r in routes
-    ])
+        routes = [
+            {
+                "id": row.id,
+                "start_location": row.start_location,
+                "end_location": row.end_location,
+                "vehicle_type": row.vehicle_type
+            }
+            for row in results
+        ]
+
+        return jsonify(routes)
+
+    except Exception as e:
+        print(f"❌ Raw SQL failed: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route("/api/debug/db")
 def debug_db():
