@@ -137,19 +137,22 @@ def search_routes():
     try:
         results = db.session.execute(
             db.text("""
-                SELECT * FROM routes
+                SELECT id, start_location, end_location, vehicle_type
+                FROM routes
                 WHERE start_location ILIKE :start
                 AND end_location ILIKE :end
             """),
             {"start": f"%{start}%", "end": f"%{end}%"}
         ).fetchall()
 
+        print(f"✅ Raw SQL returned {len(results)} rows")
+
         routes = [
             {
-                "id": row.id,
-                "start_location": row.start_location,
-                "end_location": row.end_location,
-                "vehicle_type": row.vehicle_type
+                "id": row[0],
+                "start_location": row[1],
+                "end_location": row[2],
+                "vehicle_type": row[3]
             }
             for row in results
         ]
