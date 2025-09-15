@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, send_from_directory, request
+from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -11,7 +11,11 @@ import traceback
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app, origins=["https://standfindr.web.app"])
+CORS(app, origins=[
+    "https://standfindr.web.app",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173"
+])
 
 # ------------------------------------------------------
 # Database
@@ -129,46 +133,40 @@ def get_route(route_id):
 def search_routes():
     start = request.args.get("start", "").strip()
     end = request.args.get("end", "").strip()
-    print(f"🔍 Fuzzy search: start='{start}' end='{end}'")
+    print(f"🔍 Search: start='{start}' end='{end}'")
+
+    if not start or not end:
+        return jsonify({"error": "Start and end parameters are required"}), 400
 
     try:
-        results = db.session.execute(
-            db.text("""
-                SELECT id, start_location, end_location, vehicle_type
-                FROM routes
-                WHERE LOWER(start_location) LIKE LOWER(:start)
-                AND LOWER(end_location) LIKE LOWER(:end)
-            """),
-            {"start": f"%{start}%", "end": f"%{end}%"}
-        ).fetchall()
+        # Case-insensitive and whitespace-tolerant search
+        results = Route.query.filter(
+            db.func.lower(Route.start_location).like(f"%{start.lower()}%"),
+            db.func.lower(Route.end_location).like(f"%{end.lower()}%")
+        ).all()
 
-        print(f"✅ Fuzzy match returned {len(results)} rows")
+        print(f"✅ Search returned {len(results)} results")
+        for r in results:
+            print(f"   Found: {repr(r.start_location)} -> {repr(r.end_location)}")
 
         routes = [
             {
-                "id": row[0],
-                "start_location": row[1],
-                "end_location": row[2],
-                "vehicle_type": row[3]
+                "id": r.id,
+                "start_location": r.start_location,
+                "end_location": r.end_location,
+                "vehicle_type": r.vehicle_type,
+                "fares": [{"id": f.id, "estimated_fare": float(f.estimated_fare)} for f in r.fares],
+                "landmarks": [{"id": l.id, "description": l.description, "image_url": l.image_url} for l in r.landmarks]
             }
-            for row in results
+            for r in results
         ]
 
         return jsonify(routes)
 
     except Exception as e:
         print(f"❌ Search failed: {e}")
+        traceback.print_exc()
         return jsonify({"status": "error", "message": str(e)}), 500
-
-@app.route("/api/debug/db")
-def debug_db():
-    if not db:
-        return jsonify({"status": "error", "message": "SQLAlchemy not initialized"})
-    try:
-        db.session.execute(db.text("SELECT 1"))
-        return jsonify({"status": "success", "message": "Database connected!"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
 
 # ------------------------------------------------------
 # Run
