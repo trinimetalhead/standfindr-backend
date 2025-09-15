@@ -129,20 +129,20 @@ def get_route(route_id):
 def search_routes():
     start = request.args.get("start", "").strip()
     end = request.args.get("end", "").strip()
-    print(f"🔍 Exact match search: start='{start}' end='{end}'")
+    print(f"🔍 Fuzzy search: start='{start}' end='{end}'")
 
     try:
         results = db.session.execute(
             db.text("""
                 SELECT id, start_location, end_location, vehicle_type
                 FROM routes
-                WHERE start_location = :start
-                AND end_location = :end
+                WHERE LOWER(start_location) LIKE LOWER(:start)
+                AND LOWER(end_location) LIKE LOWER(:end)
             """),
-            {"start": start, "end": end}
+            {"start": f"%{start}%", "end": f"%{end}%"}
         ).fetchall()
 
-        print(f"✅ Exact match returned {len(results)} rows")
+        print(f"✅ Fuzzy match returned {len(results)} rows")
 
         routes = [
             {
@@ -157,7 +157,7 @@ def search_routes():
         return jsonify(routes)
 
     except Exception as e:
-        print(f"❌ Exact match failed: {e}")
+        print(f"❌ Search failed: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route("/api/debug/db")
